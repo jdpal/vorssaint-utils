@@ -1290,8 +1290,8 @@ struct ClipboardFeatureStrings {
         autoClearOnSleep: "مسح الحافظة عند سكون الكمبيوتر",
         autoClearOnDisplaySleep: "مسح الحافظة عند سكون الشاشة",
         autoClearOnScreenLock: "مسح الحافظة عند قفل الشاشة",
-        autoClearCaption: "يمسح حافظة النظام فقط. أما العناصر المحفوظة فتبقى في السجل."
-    )
+        autoClearCaption: "يمسح حافظة النظام فقط. أما العناصر المحفوظة فتبقى في السجل.",
+        deleteSelectedFormat: "حذف %d")
 }
 
 struct WindowLayoutFeatureStrings {
@@ -2260,6 +2260,7 @@ struct WindowLayoutFeatureStrings {
         rightHalf: "يمين",
         topHalf: "أعلى",
         bottomHalf: "أسفل",
+        centerHalf: "النصف الأوسط",
         leftThird: "الثلث الأيسر",
         centerThird: "الثلث الأوسط",
         rightThird: "الثلث الأيمن",
@@ -2283,8 +2284,8 @@ struct WindowLayoutFeatureStrings {
         previousDisplay: "الشاشة السابقة",
         edgeSnapEnable: "محاذاة النوافذ عند حواف الشاشة",
         edgeSnapCaption: "فعّل هذا، ثم اسحب شريط عنوان النافذة إلى أي حافة أو زاوية من الشاشة وأفلته.",
-        edgeSnapSystemConflict: "يستخدم macOS الحواف نفسها. أوقف تجانب النوافذ في «سطح المكتب والـ Dock» ليتولى Vorssaint المهمة.",
-        edgeSnapOpenSystemSettings: "فتح «سطح المكتب والـ Dock»",
+        edgeSnapSystemConflict: "يستخدم macOS الحواف نفسها. أوقف تجانب النوافذ في “سطح المكتب والـ Dock” ليتولى Vorssaint المهمة.",
+        edgeSnapOpenSystemSettings: "فتح “سطح المكتب والـ Dock”",
         edgeSnapWaitingForSystem: "مفعّل في Vorssaint. وسيبدأ العمل حالما يتوقف تجانب macOS.",
         marginMaximize: "تكبير مع هامش",
         gapsSection: "الفواصل",
@@ -2296,8 +2297,7 @@ struct WindowLayoutFeatureStrings {
         gapSmall: "صغير",
         gapMedium: "متوسط",
         gapLarge: "كبير",
-        gapExtraLarge: "كبير جدًا"
-    )
+        gapExtraLarge: "كبير جدًا")
 }
 
 struct MonitorAlertFeatureStrings {
