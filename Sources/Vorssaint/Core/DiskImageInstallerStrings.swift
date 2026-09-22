@@ -42,6 +42,7 @@ extension FeatureStrings {
         case .zhHans: return .zhHans
         case .zhTW: return .zhTW
         case .zhHK: return .zhHK
+        case .uk: return .uk
         }
     }
 }
@@ -344,5 +345,27 @@ extension DiskImageInstallerStrings {
         revealAppOption: "在 Finder 中顯示已安裝的 App",
         installedKeptDownloadBodyFormat: "%@ 已可在%@中使用。磁碟映像檔已退出，下載檔案已保留。",
         installingFormat: "正在安裝 %@…"
+    )
+    static let uk = DiskImageInstallerStrings(
+        title: "Інсталятор образів диска",
+        hubDescription: "Встановлює окрему програму з образу диска та очищає завантаження",
+        useUserApplications: "Встановити в папку «Програми» у вашій домашній папці",
+        applicationsFolder: "папці «Програми»",
+        userApplicationsFolder: "папці «Програми» у вашій домашній папці",
+        promptTitle: "Встановити цю програму?",
+        promptBodyFormat: "%@ буде скопійовано до %@, а образ диска вийнято.",
+        installButton: "Встановити",
+        installedTitle: "Програму встановлено",
+        installedBodyFormat: "%@ готова у %@. Образ диска вийнято, а завантаження переміщено в Кошик.",
+        installedKeepingMountBodyFormat: "%@ встановлено до %@, але образ диска не вдалося вийняти. Завантаження збережено.",
+        installedKeepingDownloadBodyFormat: "%@ встановлено до %@, а образ диска вийнято, але завантаження не вдалося перемістити в Кошик.",
+        failedTitle: "Не вдалося встановити",
+        failedBody: "Нічого не змінено. Ви все ще можете перетягнути програму у «Програми».",
+        verificationFailedBody: "Цей Mac не зміг перевірити програму, тому нічого не встановлено.",
+        alreadyInstalledBodyFormat: "%@ вже у папці «Програми».",
+        trashDownloadOption: "Перемістити завантаження в Кошик",
+        revealAppOption: "Показати встановлену програму у Finder",
+        installedKeptDownloadBodyFormat: "%@ готова у %@. Образ диска вийнято, а завантаження збережено.",
+        installingFormat: "Встановлення %@…"
     )
 }

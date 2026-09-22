@@ -29,6 +29,7 @@ extension FeatureStrings {
         case .it: return .it
         case .ja: return .ja
         case .ko: return .ko
+        case .uk: return .uk
         case .zhHans: return .zhHans
         case .zhTW: return .zhTW
         case .zhHK: return .zhHK
@@ -37,6 +38,17 @@ extension FeatureStrings {
 }
 
 extension SettingsPageStrings {
+    static let uk = SettingsPageStrings(
+        energyDescription: "Не давайте Mac заснути, керуйте екранами та заощаджуйте заряд акумулятора.",
+        monitorDescription: "Що рядок меню й панель показують про Mac та коли попереджати вас.",
+        mouseDescription: "Дайте колесу, боковим кнопкам і трекпаду нові функції.",
+        switcherDescription: "Перемикайте програми й вікна на свій лад та переглядайте вікна з Dock.",
+        switcherLayoutWindows: "Мініатюри вікон",
+        switcherLayoutWindowsCaption: "По одній мініатюрі для кожного вікна, включно зі згорнутими.",
+        switcherLayoutIcons: "Великі значки",
+        switcherLayoutSimple: "Простий список"
+    )
+
     static let enUS = SettingsPageStrings(
         energyDescription: "Keep the Mac awake, control your displays and save battery.",
         monitorDescription: "What the menu bar and the panel show about your Mac, and when to warn you.",

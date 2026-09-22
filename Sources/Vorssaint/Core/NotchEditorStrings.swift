@@ -529,6 +529,43 @@ extension FeatureStrings {
             keyboardLightUnavailable: "此 Mac 無法控制鍵盤背光。",
             appPanelHint: "選擇在任何螢幕上按一下選單列的 Vorssaint 圖像時開啟面板的位置。"
         )
+        case .uk: return NotchEditorStrings(
+            layout: "Розкладка",
+            content: "Вміст",
+            activity: "Активність",
+            behavior: "Поведінка",
+            layoutHint: "Натисніть +, щоб додати кнопку. Перетягуйте кнопки навколо острівця. Натисніть кнопку, щоб редагувати її.",
+            addButton: "Додати кнопку",
+            editButton: "Редагувати кнопку",
+            removeButton: "Видалити кнопку",
+            buttonName: "Назва",
+            position: "Позиція",
+            bottom: "Унизу",
+            sectionActions: "Відкрити розділ",
+            quickActions: "Швидкі дії",
+            findAction: "Знайти дію",
+            reorderHint: "Перетягуйте, щоб змінити порядок. Натисніть галочку, щоб показати або сховати.",
+            opening: "Відкриття",
+            clickOpen: "Відкривати клацанням",
+            hoverPreview: "Перегляд при наведенні",
+            hoverExpand: "Розгортати при наведенні",
+            hiddenUntilHover: "Приховано до наведення",
+            resting: "У стані спокою",
+            destinations: "Де відкривається",
+            separate: "Окреме вікно",
+            feedback: "Індикатори",
+            privacy: "Приватність",
+            reopening: "При повторному відкритті",
+            lastPage: "Остання сторінка",
+            activationTime: "Час активації",
+            activationTimeHint: "Тримайте вказівник над острівцем стільки часу, щоб відкрити його.",
+            activationTimeFormat: "%.2f с",
+            enableFeatureFormat: "Увімкніть «%@» у Функціях.",
+            enableSettingFormat: "Увімкніть «%@» у налаштуваннях функції.",
+            showPageFormat: "Покажіть «%@» на вкладці Вміст.",
+            keyboardLightUnavailable: "Керування підсвічуванням клавіатури недоступне на цьому Mac.",
+            appPanelHint: "Виберіть, де відкриватиметься панель програми після натискання значка Vorssaint у рядку меню на будь-якому дисплеї."
+        )
         }
     }
 }
