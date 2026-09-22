@@ -21,7 +21,7 @@ Dynamic Island improves list readability and playback controls, can hide in full
 - With Liquid Glass enabled, the expanded Dynamic Island uses clear glass with a dark top that fades toward the lower edge, keeping the desktop's detail and refraction visible. Resting and compact strips stay black, and Reduce Transparency keeps the solid surface.
 
 ### Fixed
-- App Switcher and Dock Preview bring the selected window forward without resizing it toward the top-left corner of the screen.
+- App Switcher and Dock Preview bring the selected window forward without resizing it toward the top-left corner of the screen, and without pressing a control in apps that place a missing click location at their top-left corner.
 - Dynamic Island keeps the artist visible in Now Playing while a song plays; the music bars no longer push that line out.
 - Dynamic Island's resting strips for music, battery and level feedback match the camera cutout's height and corners, so no dark line shows under the notch and opening or closing settles into it.
 - Dynamic Island restores the Beta 3 music display at rest, with artwork on the left and the equalizer on the right. Clicking it opens the music controls.
