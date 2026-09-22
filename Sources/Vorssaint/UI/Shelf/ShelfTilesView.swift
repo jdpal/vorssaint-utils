@@ -164,10 +164,18 @@ struct ShelfTilesView: NSViewRepresentable {
             ? ShelfTileLayout.rowCount(contentHeight: scroll.contentSize.height, tileHeight: tile.height,
                                        spacing: spacing, inset: inset)
             : max(1, Int(ceil(Double(items.count) / Double(columns))))
+        // The grid is AppKit, laid out in absolute frames, so the layout
+        // direction has to be carried in by hand rather than inherited.
+        let mirroredWidth = L10n.shared.language.isRightToLeft ? contentWidth : nil
         let frame: (Int) -> CGRect = { index in
-            sideways
-                ? ShelfTileLayout.sidewaysTileFrame(index: index, rows: rows, tileSize: tile, spacing: spacing, inset: inset)
-                : ShelfTileLayout.tileFrame(index: index, columns: columns, tileSize: tile, spacing: spacing, inset: inset)
+            if sideways {
+                return ShelfTileLayout.sidewaysTileFrame(index: index, rows: rows, tileSize: tile,
+                                                         spacing: spacing, inset: inset,
+                                                         mirroredIn: mirroredWidth)
+            }
+            return ShelfTileLayout.tileFrame(index: index, columns: columns, tileSize: tile,
+                                             spacing: spacing, inset: inset,
+                                             mirroredIn: mirroredWidth)
         }
 
         // Item.== is id-only (by design, for selection/lookup purposes
@@ -361,7 +369,7 @@ final class ShelfTileView: NSView, NSDraggingSource {
             addSubview(badge)
 
             let expand = NSButton(frame: NSRect(x: 4, y: 4, width: 17, height: 17))
-            expand.image = NSImage(systemSymbolName: isExpanded ? "chevron.down.circle.fill" : "chevron.right.circle.fill",
+            expand.image = NSImage(systemSymbolName: isExpanded ? "chevron.down.circle.fill" : "chevron.forward.circle.fill",
                                    accessibilityDescription: nil)
             expand.isBordered = false
             expand.bezelStyle = .regularSquare
