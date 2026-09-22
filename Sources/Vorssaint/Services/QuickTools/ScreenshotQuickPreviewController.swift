@@ -21,6 +21,7 @@ final class ScreenshotQuickPreviewModel: ObservableObject {
 final class ScreenshotQuickPreviewController {
     enum Action {
         case edit
+        case pin
         case copy
         case save
         case saveAndCopy
@@ -493,6 +494,16 @@ private struct ScreenshotQuickPreviewView: View {
                 shareMenu
             }
             if !embedded { Spacer(minLength: 4) }
+            Button {
+                perform(.pin)
+            } label: {
+                Image(systemName: "pin")
+                    .frame(width: embedded ? 28 : 22, height: embedded ? 28 : 18)
+            }
+            .modifier(ScreenshotPreviewActionStyle(embedded: embedded))
+            .controlSize(.small)
+            .screenshotSafeHelp(strings.pinButton)
+            .accessibilityLabel(strings.pinButton)
             Button { perform(.edit) } label: {
                 if embedded { Image(systemName: "pencil").frame(width: 28, height: 28) }
                 else { Text(strings.editButton) }
