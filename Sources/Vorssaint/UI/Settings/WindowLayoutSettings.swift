@@ -7,6 +7,8 @@ struct WindowLayoutSettings: View {
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var permissions = Permissions.shared
     @ObservedObject private var service = WindowLayoutService.shared
+    @ObservedObject private var pointerDisplay = PointerDisplayService.shared
+    @AppStorage(DefaultsKey.pointerDisplayEnabled) private var pointerDisplayEnabled = false
     @AppStorage(DefaultsKey.panelUtilityWindowLayout) private var showInPanel = true
     @AppStorage(DefaultsKey.windowLayoutShortcutsEnabled) private var shortcutsEnabled = true
     @AppStorage(DefaultsKey.windowDirectionalEnabled) private var directionalEnabled = false
@@ -140,6 +142,31 @@ struct WindowLayoutSettings: View {
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
+                }
+            }
+
+            // The pointer moves without Accessibility, so this sits outside
+            // the window shortcuts toggle and works before that grant.
+            Section {
+                Toggle(PointerDisplayStrings.localized(l10n.language).title,
+                       isOn: $pointerDisplayEnabled)
+                    .onChange(of: pointerDisplayEnabled) { _, _ in
+                        pointerDisplay.syncWithPreferences()
+                    }
+                Text(PointerDisplayStrings.localized(l10n.language).caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ShortcutPreferenceRow(role: .pointerNextDisplay,
+                                      isEnabled: pointerDisplayEnabled,
+                                      additionalConflict: {
+                                          service.shortcutConflictTitle($0)
+                                      }) {
+                    pointerDisplay.syncWithPreferences()
+                }
+                if pointerDisplayEnabled, pointerDisplay.shortcutRegistrationFailed {
+                    Text(l10n.s.shortcutUnavailable)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
 
