@@ -276,6 +276,15 @@ enum WindowLayoutGaps {
     }
 }
 
+/// Whether a repeated Left or Right cycles the window through half, two thirds
+/// and one third of the same display instead of
+/// pushing it onto the display beside it.
+enum WindowLayoutSideRepeat {
+    static var cyclesThirds: Bool {
+        UserDefaults.standard.bool(forKey: DefaultsKey.windowLayoutSideRepeatCyclesThirds)
+    }
+}
+
 enum WindowLayoutGeometry {
     /// Points the settle path allows a window to miss its target by. Display
     /// transfer uses the same value to treat a window as filling the source
@@ -285,22 +294,76 @@ enum WindowLayoutGeometry {
     static func effectiveAction(for action: WindowLayoutAction,
                                 current _: CGRect,
                                 visibleFrame _: CGRect,
-                                previousAction: WindowLayoutAction? = nil) -> WindowLayoutAction {
+                                previousAction: WindowLayoutAction? = nil,
+                                sideRepeatCyclesThirds: Bool = false) -> WindowLayoutAction {
         if action == .topHalf, previousAction == .topHalf {
             return .maximize
         }
+        if sideRepeatCyclesThirds, let next = sideCycleAction(for: action, previousAction: previousAction) {
+            return next
+        }
         return action
+    }
+
+    /// The window size cycle for a repeated side action: half, then
+    /// two thirds, then one third, then back to the half. Only sizes reached
+    /// from the same side count, so a left after a right third starts over.
+    static func sideCycleAction(for action: WindowLayoutAction,
+                                previousAction: WindowLayoutAction?) -> WindowLayoutAction? {
+        let cycle: [WindowLayoutAction]
+        switch action {
+        case .leftHalf: cycle = [.leftHalf, .leftTwoThirds, .leftThird]
+        case .rightHalf: cycle = [.rightHalf, .rightTwoThirds, .rightThird]
+        default: return nil
+        }
+        guard let previousAction, let index = cycle.firstIndex(of: previousAction) else { return nil }
+        return cycle[(index + 1) % cycle.count]
+    }
+
+    /// Whether the size cycle may advance: only from a window still sitting
+    /// where the previous step left it, either the frame it was read back at
+    /// (an app's minimum size included, so a clamped half still cycles) or the
+    /// frame it asked for (an app that commits its resize late is read back at
+    /// the old frame). A window widened or dragged by hand matches neither.
+    static func sideCycleContinues(current: WindowLayoutFrame,
+                                   settled: WindowLayoutSettledFrame?,
+                                   tolerance: CGFloat) -> Bool {
+        guard let settled else { return false }
+        return current.isClose(to: settled.actual, tolerance: tolerance)
+            || current.isClose(to: settled.requested, tolerance: tolerance)
+    }
+
+    /// Whether a frame read back after the placement was accepted is the app
+    /// committing that placement late rather than a change by hand: every
+    /// edge sits at least as close to the requested frame as the earlier read
+    /// did, within tolerance. A clamped resize that lands moves toward the
+    /// request; a window widened or dragged in the meantime moves away.
+    static func settledFrameRefreshAccepts(actual: WindowLayoutFrame,
+                                           settled: WindowLayoutSettledFrame,
+                                           tolerance: CGFloat) -> Bool {
+        if actual.isClose(to: settled.requested, tolerance: tolerance) { return true }
+        func approaches(_ read: CGFloat, _ earlier: CGFloat, _ requested: CGFloat) -> Bool {
+            abs(read - requested) <= abs(earlier - requested) + tolerance
+        }
+        let requested = settled.requested
+        let earlier = settled.actual
+        return approaches(actual.origin.x, earlier.origin.x, requested.origin.x)
+            && approaches(actual.origin.y, earlier.origin.y, requested.origin.y)
+            && approaches(actual.size.width, earlier.size.width, requested.size.width)
+            && approaches(actual.size.height, earlier.size.height, requested.size.height)
     }
 
     /// Where a repeated side action goes: asking for the same side again keeps
     /// pushing that way, so the window leaves through that edge and lands
     /// against the opposite one on the display beside it. Top and bottom keep
-    /// promoting to maximize instead.
+    /// promoting to maximize instead. With the size cycle on, the repeat is
+    /// spent on the same display and never crosses.
     static func displayCrossing(
         for action: WindowLayoutAction,
-        previousAction: WindowLayoutAction?
+        previousAction: WindowLayoutAction?,
+        sideRepeatCyclesThirds: Bool = false
     ) -> (action: WindowLayoutAction, movingRight: Bool)? {
-        guard action == previousAction else { return nil }
+        guard !sideRepeatCyclesThirds, action == previousAction else { return nil }
         switch action {
         case .leftHalf: return (.rightHalf, false)
         case .rightHalf: return (.leftHalf, true)
@@ -798,6 +861,13 @@ struct WindowLayoutFrame: Equatable {
             && abs(size.width - other.size.width) <= tolerance
             && abs(size.height - other.size.height) <= tolerance
     }
+}
+
+/// What a placement left behind: the frame it asked for and the one the
+/// window was read back at once the placement was accepted.
+struct WindowLayoutSettledFrame: Equatable {
+    var requested: WindowLayoutFrame
+    var actual: WindowLayoutFrame
 }
 
 struct WindowLayoutWindowKey: Hashable {
