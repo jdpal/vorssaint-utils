@@ -4584,7 +4584,48 @@ enum SwitcherModelFeatureTests {
                                                         targetIsMinimized: false,
                                                         targetStartedMinimized: false,
                                                         ownPID: 99),
-               "App Switcher focus retries can continue during the source-target handoff")
+               "App Switcher focus retries preserve the source handoff while it settles")
+        suite.expect(SwitcherSupport.retainedActivationSourcePID(explicit: nil,
+                                                           targetPID: 10,
+                                                           frontmostPID: 20,
+                                                           ownPID: 99) == 20,
+               "activation without a session source keeps the frontmost app as the handoff source")
+        suite.expect(SwitcherSupport.retainedActivationSourcePID(explicit: 20,
+                                                           targetPID: 10,
+                                                           frontmostPID: 30,
+                                                           ownPID: 99) == 20,
+               "an explicit session source outranks the app that happens to be frontmost")
+        suite.expect(SwitcherSupport.retainedActivationSourcePID(explicit: nil,
+                                                           targetPID: 10,
+                                                           frontmostPID: 10,
+                                                           ownPID: 99) == nil
+               && SwitcherSupport.retainedActivationSourcePID(explicit: nil,
+                                                        targetPID: 10,
+                                                        frontmostPID: 99,
+                                                        ownPID: 99) == nil,
+               "the target and this process are never kept as an activation source")
+        suite.expect(SwitcherSupport.shouldContinueFocusRetry(
+                        targetPID: 10,
+                        sourcePID: SwitcherSupport.retainedActivationSourcePID(explicit: nil,
+                                                                         targetPID: 10,
+                                                                         frontmostPID: 20,
+                                                                         ownPID: 99),
+                        frontmostPID: 20,
+                        targetIsMinimized: false,
+                        targetStartedMinimized: false,
+                        ownPID: 99),
+               "Dock Preview and Command Bar ordinary windows keep their settling retry while the retained source is frontmost")
+        suite.expect(!SwitcherSupport.shouldContinueFocusRetry(
+                         targetPID: 10,
+                         sourcePID: SwitcherSupport.retainedActivationSourcePID(explicit: nil,
+                                                                          targetPID: 10,
+                                                                          frontmostPID: 20,
+                                                                          ownPID: 99),
+                         frontmostPID: 30,
+                         targetIsMinimized: false,
+                         targetStartedMinimized: false,
+                         ownPID: 99),
+               "a retained activation source still stands down after an unrelated app becomes frontmost")
         suite.expect(!SwitcherSupport.shouldContinueFocusRetry(targetPID: 10,
                                                          sourcePID: 20,
                                                          frontmostPID: 20,
@@ -4599,6 +4640,13 @@ enum SwitcherModelFeatureTests {
                                                         targetStartedMinimized: true,
                                                         ownPID: 99),
                "App Switcher retries restoration when the selected target started minimized")
+        suite.expect(SwitcherSupport.shouldContinueFocusRetry(targetPID: 10,
+                                                        sourcePID: nil,
+                                                        frontmostPID: 30,
+                                                        targetIsMinimized: true,
+                                                        targetStartedMinimized: true,
+                                                        ownPID: 99),
+               "App Switcher keeps an initial minimized restoration alive without a source app")
         suite.expect(!SwitcherSupport.shouldContinueFocusRetry(targetPID: 10,
                                                           sourcePID: 20,
                                                           frontmostPID: 10,
@@ -4641,6 +4689,42 @@ enum SwitcherModelFeatureTests {
             .components(separatedBy: "\n")
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
+        suite.expect(activatorCode.contains("retainedActivationSourcePID("),
+               "activation resolves a retained source before scheduling focus retries")
+        let dockPreviewActivationCode = ((try? String(
+            contentsOfFile: "Sources/Vorssaint/Services/DockPreview/DockPreviewService.swift",
+            encoding: .utf8)) ?? "")
+            .components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        let dockActivateCalls = dockPreviewActivationCode
+            .components(separatedBy: "WindowActivator.activate(")
+            .dropFirst()
+        suite.expect(dockActivateCalls.count >= 3
+               && dockActivateCalls.allSatisfy { $0.contains("sourcePID:") }
+               && dockPreviewActivationCode.contains(
+                    "sourcePID: NSWorkspace.shared.frontmostApplication"),
+               "Dock Preview retains the frontmost app as the activation source")
+        let commandBarWindowActivate: String = {
+            let source = ((try? String(
+                contentsOfFile: "Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.swift",
+                encoding: .utf8)) ?? "")
+                .components(separatedBy: "\n")
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+            guard let start = source.range(of: "WindowActivator.activate(pid:") else { return "" }
+            let before = source[..<start.lowerBound]
+            let sourceCapture = before.range(of: "let sourcePID = NSWorkspace.shared.frontmostApplication",
+                                             options: .backwards)
+            let afterBeat = before.range(of: "afterBeat(", options: .backwards)
+            let call = String(source[start.lowerBound...].prefix(320))
+            guard let sourceCapture, let afterBeat,
+                  sourceCapture.lowerBound < afterBeat.lowerBound,
+                  call.contains("sourcePID: sourcePID") else { return "" }
+            return call
+        }()
+        suite.expect(!commandBarWindowActivate.isEmpty,
+               "Command Bar retains the frontmost app before its activation beat")
         let windowScopes = activatorCode
             .components(separatedBy: "windowIDs(ownerPID:")
             .dropFirst()
@@ -5357,10 +5441,20 @@ enum SwitcherModelFeatureTests {
         let state = SwitcherWindowFocusRetryState(targetWindowID: 101,
                                                   targetStartedMinimized: false,
                                                   knownWindowIDs: snapshot)
-        suite.expect(state.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+        suite.expect(!state.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
                                     targetMinimizedState: false, targetAppWindowIDs: withHelper,
-                                    targetAppFocusedWindowID: 101, ownPID: 99),
-               "a transparent helper does not cancel the fullscreen focus chain")
+                                    targetAppFocusedWindowID: 101,
+                                    targetWindowIsFocused: true,
+                                    stopsWhenTargetFocused: true, ownPID: 99),
+               "a transparent helper does not justify re-raising an already focused target")
+        let fullscreenState = SwitcherWindowFocusRetryState(targetWindowID: 101,
+                                                            targetStartedMinimized: false,
+                                                            knownWindowIDs: snapshot)
+        suite.expect(fullscreenState.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+                                             targetMinimizedState: false, targetAppWindowIDs: withHelper,
+                                             targetAppFocusedWindowID: 101,
+                                             targetWindowIsFocused: true, ownPID: 99),
+               "fullscreen retries keep later passes available for an already focused target")
         suite.expect(!state.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
                                      targetMinimizedState: false, targetAppWindowIDs: [500],
                                      targetAppFocusedWindowID: 500, ownPID: 99),
@@ -5387,17 +5481,27 @@ enum SwitcherModelFeatureTests {
                 suite.expect(!pending.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: foreground,
                                                 targetMinimizedState: false, targetAppWindowIDs: [500],
                                                 targetAppFocusedWindowID: focusAfterSwitchingAway(), ownPID: 99),
-                       "a slow focus query cannot reclaim the app after the user leaves it")
+                       "a slow focus query cannot reclaim the app after the user leaves it (destination \(String(describing: destination)), focus \(String(describing: focusResult)))")
             }
         }
 
         let partial = SwitcherWindowFocusRetryState(targetWindowID: 101,
                                                     targetStartedMinimized: false,
                                                     knownWindowIDs: [102])
-        suite.expect(partial.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
-                                      targetMinimizedState: false, targetAppWindowIDs: [101],
-                                      targetAppFocusedWindowID: 101, ownPID: 99),
-               "the selected target is not new when a partial snapshot missed it")
+        suite.expect(!partial.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+                                       targetMinimizedState: false, targetAppWindowIDs: [101],
+                                       targetAppFocusedWindowID: 101,
+                                       targetWindowIsFocused: true,
+                                       stopsWhenTargetFocused: true, ownPID: 99),
+               "a focused selected target does not receive a redundant retry")
+        let unfocused = SwitcherWindowFocusRetryState(targetWindowID: 101,
+                                                       targetStartedMinimized: false,
+                                                       knownWindowIDs: [101, 102])
+        suite.expect(unfocused.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+                                        targetMinimizedState: false, targetAppWindowIDs: [102],
+                                        targetAppFocusedWindowID: 102,
+                                        stopsWhenTargetFocused: true, ownPID: 99),
+               "an unfocused selected target still gets its settling retry")
         let minimized = SwitcherWindowFocusRetryState(targetWindowID: 101,
                                                       targetStartedMinimized: true,
                                                       knownWindowIDs: snapshot)

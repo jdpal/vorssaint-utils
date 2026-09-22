@@ -22,7 +22,7 @@ enum WindowActivator {
     static func activate(_ item: SwitcherItem,
                          retry: Bool = true,
                          sourceWasFullscreen: Bool = false,
-                         sourcePID: pid_t? = nil,
+                         sourcePID explicitSourcePID: pid_t? = nil,
                          sourceWindowID: CGWindowID? = nil,
                          sourceWindowOwnerPID: pid_t? = nil) {
         let generation = beginActivation(for: item.pid)
@@ -35,6 +35,15 @@ enum WindowActivator {
         }
 
         guard let app = NSRunningApplication(processIdentifier: item.pid) else { return }
+        // Dock Preview and the Command Bar often omit a session source. Keep
+        // the frontmost app from activation start so the ordinary handoff
+        // retry still settles, without reclaiming focus after a later
+        // unrelated activation.
+        let sourcePID = SwitcherSupport.retainedActivationSourcePID(
+            explicit: explicitSourcePID,
+            targetPID: item.pid,
+            frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+        )
         let windowOwnerPID = item.windowOwnerPID
 
         app.unhide()
@@ -108,7 +117,8 @@ enum WindowActivator {
                                                    targetPID: item.pid,
                                                    targetWindowOwnerPID: windowOwnerPID,
                                                    sourcePID: sourcePID,
-                                                   state: retryState),
+                                                   state: retryState,
+                                                   stopsWhenTargetFocused: false),
                           let app = NSRunningApplication(processIdentifier: item.pid),
                           !app.isTerminated else { return }
                     prepareWindowForActivation(windowID: windowID, pid: windowOwnerPID)
@@ -132,7 +142,8 @@ enum WindowActivator {
                                   state: retryState,
                                   activationPlan: activationPlan,
                                   generation: generation,
-                                  delays: Self.fullscreenFocusRetryDelays)
+                                  delays: Self.fullscreenFocusRetryDelays,
+                                  stopsWhenTargetFocused: false)
             return
         }
 
@@ -163,10 +174,15 @@ enum WindowActivator {
                               state: retryState,
                               activationPlan: activationPlan,
                               generation: generation,
-                              delays: [focusRetryDelay])
+                              delays: [focusRetryDelay],
+                              stopsWhenTargetFocused: true)
     }
 
-    static func activate(pid: pid_t, windowID: CGWindowID?, appName: String, retry: Bool = true) {
+    static func activate(pid: pid_t,
+                         windowID: CGWindowID?,
+                         appName: String,
+                         retry: Bool = true,
+                         sourcePID: pid_t? = nil) {
         let item: SwitcherItem
         if let windowID {
             item = .window(id: windowID, title: appName, appName: appName,
@@ -174,7 +190,7 @@ enum WindowActivator {
         } else {
             item = .appOnly(appName: appName, pid: pid)
         }
-        activate(item, retry: retry)
+        activate(item, retry: retry, sourcePID: sourcePID)
     }
 
     static func focusedWindowID(for pid: pid_t) -> CGWindowID? {
@@ -463,7 +479,8 @@ enum WindowActivator {
                                              state: SwitcherWindowFocusRetryState,
                                              activationPlan: SwitcherActivationPlan,
                                              generation: UInt64,
-                                             delays: [TimeInterval]) {
+                                             delays: [TimeInterval],
+                                             stopsWhenTargetFocused: Bool = false) {
         for delay in delays {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 guard isCurrentActivation(generation),
@@ -471,7 +488,8 @@ enum WindowActivator {
                                                targetPID: targetPID,
                                                targetWindowOwnerPID: targetWindowOwnerPID,
                                                sourcePID: sourcePID,
-                                               state: state),
+                                               state: state,
+                                               stopsWhenTargetFocused: stopsWhenTargetFocused),
                       let app = NSRunningApplication(processIdentifier: targetPID),
                       !app.isTerminated else { return }
                 prepareWindowForActivation(windowID: windowID, pid: targetWindowOwnerPID)
@@ -537,7 +555,8 @@ enum WindowActivator {
                                                  targetWindowOwnerPID: pid_t,
                                                  sourcePID: pid_t?,
                                                  state: SwitcherWindowFocusRetryState,
-                                                 ignoresForeground: Bool = false) -> Bool {
+                                                 ignoresForeground: Bool = false,
+                                                 stopsWhenTargetFocused: Bool = false) -> Bool {
         guard state.isActive else { return false }
         func currentFrontmostPID() -> pid_t? {
             let reported = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -545,6 +564,14 @@ enum WindowActivator {
         }
         let minimizedState = windowMinimizedState(windowID: windowID,
                                                   pid: targetWindowOwnerPID)
+        var resolvedFocusedWindowID: CGWindowID?
+        var didResolveFocusedWindowID = false
+        func currentFocusedWindowID() -> CGWindowID? {
+            guard !didResolveFocusedWindowID else { return resolvedFocusedWindowID }
+            didResolveFocusedWindowID = true
+            resolvedFocusedWindowID = focusedWindowID(for: targetWindowOwnerPID)
+            return resolvedFocusedWindowID
+        }
         return state.shouldContinue(
             targetPID: targetPID,
             sourcePID: sourcePID,
@@ -557,7 +584,9 @@ enum WindowActivator {
             // snapshot reported nothing new in exactly the race this guard
             // exists for, and the focus reading below was never taken.
             targetAppWindowIDs: windowIDs(ownerPID: targetWindowOwnerPID, options: .optionAll),
-            targetAppFocusedWindowID: focusedWindowID(for: targetWindowOwnerPID),
+            targetAppFocusedWindowID: currentFocusedWindowID(),
+            targetWindowIsFocused: currentFocusedWindowID() == windowID,
+            stopsWhenTargetFocused: stopsWhenTargetFocused,
             ignoresForeground: ignoresForeground
         )
     }

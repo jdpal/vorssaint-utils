@@ -213,7 +213,12 @@ final class DockPreviewService: ObservableObject {
         }
         endSession()
         guard WindowEnumerator.dockPreviewMayActivate(item) else { return }
-        WindowActivator.activate(item)
+        // Retain the frontmost app before activation so the delayed focus
+        // handoff still settles when that app remains in front.
+        WindowActivator.activate(
+            item,
+            sourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+        )
         restoreFrame?()
     }
 
@@ -327,7 +332,10 @@ final class DockPreviewService: ObservableObject {
         let moved = WindowActivator.place(item, origin: origin, pointer: pointer)
         endSession()
         if moved {
-            WindowActivator.activate(item)
+            WindowActivator.activate(
+                item,
+                sourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+            )
             WindowActivator.focusPlacedWindow(item)
         }
     }
@@ -1616,7 +1624,10 @@ final class DockPreviewPinnedPanel: ObservableObject, Identifiable {
             return
         }
         selectedWindowID = item.windowID
-        WindowActivator.activate(item)
+        WindowActivator.activate(
+            item,
+            sourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+        )
     }
 
     func closeWindow(_ item: SwitcherItem) {

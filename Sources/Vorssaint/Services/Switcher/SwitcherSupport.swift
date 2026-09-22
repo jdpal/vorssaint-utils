@@ -54,9 +54,20 @@ final class SwitcherWindowFocusRetryState {
                         targetMinimizedState: Bool?,
                         targetAppWindowIDs: @autoclosure () -> Set<CGWindowID>,
                         targetAppFocusedWindowID: @autoclosure () -> CGWindowID?,
+                        targetWindowIsFocused: @autoclosure () -> Bool = false,
+                        stopsWhenTargetFocused: Bool = false,
                         ignoresForeground: Bool = false,
                         ownPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> Bool {
         guard isActive else { return false }
+        let observedFrontmostPID = frontmostPID()
+        if stopsWhenTargetFocused,
+           !ignoresForeground,
+           !targetStartedMinimized,
+           observedFrontmostPID == targetPID,
+           targetWindowIsFocused() {
+            isActive = false
+            return false
+        }
         isActive = SwitcherSupport.shouldContinueFocusRetry(
             targetPID: targetPID,
             sourcePID: sourcePID,
@@ -1347,6 +1358,21 @@ enum SwitcherSupport {
         })
     }
 
+    /// Source app for a delayed focus retry. Prefer an explicit session source;
+    /// otherwise keep whatever was frontmost when activation began. The target
+    /// and this process are excluded so a settling handoff still gets its pass
+    /// without treating an unrelated later activation as that source.
+    static func retainedActivationSourcePID(explicit: pid_t?,
+                                            targetPID: pid_t,
+                                            frontmostPID: pid_t?,
+                                            ownPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> pid_t? {
+        let candidate = explicit ?? frontmostPID
+        guard let candidate,
+              candidate != targetPID,
+              candidate != ownPID else { return nil }
+        return candidate
+    }
+
     static func shouldContinueFocusRetry(targetPID: pid_t,
                                          sourcePID: pid_t?,
                                          frontmostPID: @autoclosure () -> pid_t?,
@@ -1364,13 +1390,20 @@ enum SwitcherSupport {
         let initialFrontmostPID = frontmostPID()
         // A hop travels across desktops, and the system fronts whatever sits
         // on top of each one it passes. Which app is in front while that runs
-        // says nothing about where the user wants to be, and reading it as
-        // "they moved on" leaves the window they picked behind that app. Such
-        // a pass gives up for the one signal that does carry intent: the app
-        // moved to a window it opened after the switch.
+        // says nothing about where the user wants to be, so hop passes opt out
+        // of this check and use the app's own focus below. Ordinary retries
+        // must never reclaim a window after an unrelated app is frontmost.
+        // The source app is allowed while the handoff is settling, because
+        // the target may still need its delayed pass.
+        let waitingForInitialMinimizedRestore = targetStartedMinimized
+            && targetIsMinimized
+            && (sourcePID == nil || initialFrontmostPID == sourcePID)
         if !ignoresForeground,
-           let sourcePID, let initialFrontmostPID,
-           initialFrontmostPID != targetPID && initialFrontmostPID != sourcePID && initialFrontmostPID != ownPID {
+           let initialFrontmostPID,
+           initialFrontmostPID != targetPID,
+           initialFrontmostPID != ownPID,
+           initialFrontmostPID != sourcePID,
+           !waitingForInitialMinimizedRestore {
             return false
         }
         // Z-order cannot identify keyboard focus: a new transparent helper
