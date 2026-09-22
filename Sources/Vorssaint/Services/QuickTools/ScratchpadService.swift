@@ -18,6 +18,11 @@ final class ScratchpadService: NSObject, ObservableObject, NSWindowDelegate {
     @Published private(set) var shortcutRegistrationFailed = false
     @Published private(set) var isPinned = false
     @Published private(set) var isPreviewing = false
+    /// Not a preference: the row is a thing you reach for while writing, not a
+    /// choice about the pad, so every opening starts without it and one click
+    /// brings it back. Held here rather than in either view so both pads agree
+    /// while the pad is up.
+    @Published private(set) var marksExpanded = false
     @Published private(set) var pads: [ScratchpadPad] = []
     @Published private(set) var selectedPadID: UUID?
     /// Bumped when Command-W asks the view to close the selected tab
@@ -103,6 +108,7 @@ final class ScratchpadService: NSObject, ObservableObject, NSWindowDelegate {
             return
         }
         isPreviewing = false
+        marksExpanded = false
         isPinned = !closesOnClickOutside
         guard loadApplyingRetention() else {
             QuickToolHUD.show(
@@ -130,6 +136,7 @@ final class ScratchpadService: NSObject, ObservableObject, NSWindowDelegate {
     /// copy) without showing the floating pad, and commit when it leaves.
     func loadForEmbedding() -> Bool {
         guard AppFeature.scratchpad.isAvailable else { return false }
+        marksExpanded = false
         return loadApplyingRetention()
     }
 
@@ -277,9 +284,37 @@ final class ScratchpadService: NSObject, ObservableObject, NSWindowDelegate {
         flushSave()
     }
 
+    /// The toolbar types the Markdown the user would have typed, through the
+    /// text view so one Cmd+Z takes the whole mark back. The island passes its
+    /// own editor for the same undo there.
+    func apply(_ mark: ScratchpadMark, through editor: NSTextView? = nil) {
+        guard !isPreviewing else { return }
+        guard let textView = editor ?? textView.flatMap({ $0.window === panel ? $0 : nil }) else { return }
+        // A live input-method composition holds a marked range into the
+        // storage; editing around it leaves that range pointing at nothing.
+        if textView.hasMarkedText() { textView.unmarkText() }
+        // Clicking a button takes first responder away from the editor, and a
+        // selection set on a view that is not first responder does not show.
+        textView.window?.makeFirstResponder(textView)
+        let edit = ScratchpadSupport.edit(applying: mark,
+                                          to: textView.string,
+                                          selection: textView.selectedRange())
+        guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else { return }
+        textView.replaceCharacters(in: edit.range, with: edit.replacement)
+        textView.didChangeText()
+        textView.setSelectedRange(edit.selection)
+        textView.scrollRangeToVisible(edit.selection)
+        flushSave()
+    }
+
+    func toggleMarks() {
+        marksExpanded.toggle()
+    }
+
     func togglePreview() {
         guard !text.isEmpty else { return }
         isPreviewing.toggle()
+        if isPreviewing { marksExpanded = false }
         if isPreviewing {
             panel?.makeFirstResponder(nil)
         } else {
@@ -435,7 +470,7 @@ final class ScratchpadService: NSObject, ObservableObject, NSWindowDelegate {
                                                   exportModalActive: modalInteractionActive)
     }
 
-    private func performFocusedTabShortcut(_ action: ScratchpadFocusedTabShortcut.Action) {
+    private func performFocusedTabShortcut(_ action: ScratchpadFocusedShortcut.Action) {
         switch action {
         case .createPad:
             createPad(defaultName: FeatureStrings.scratchpad(L10n.shared.language).pageTitle)
@@ -443,7 +478,19 @@ final class ScratchpadService: NSObject, ObservableObject, NSWindowDelegate {
             keyboardCloseSelectedPadSerial += 1
         case .hidePad:
             hide()
+        case .find:
+            showFindBar()
         }
+    }
+
+    /// The text view runs the find itself; it only has to be told which of the
+    /// finder's actions was asked for, and that arrives as a sender's tag.
+    func showFindBar(in editor: NSTextView? = nil) {
+        guard let textView = editor ?? textView.flatMap({ $0.window === panel ? $0 : nil }) else { return }
+        let sender = NSMenuItem()
+        sender.tag = NSTextFinder.Action.showFindInterface.rawValue
+        textView.window?.makeFirstResponder(textView)
+        textView.performTextFinderAction(sender)
     }
 
     private func installMonitors(for panel: NSPanel) {
@@ -461,7 +508,7 @@ final class ScratchpadService: NSObject, ObservableObject, NSWindowDelegate {
             guard !self.modalInteractionActive else { return event }
             let commandOnly = event.modifierFlags
                 .intersection([.command, .option, .shift, .control]) == .command
-            if let action = ScratchpadFocusedTabShortcut.action(
+            if let action = ScratchpadFocusedShortcut.action(
                 charactersIgnoringModifiers: event.charactersIgnoringModifiers,
                 commandOnly: commandOnly,
                 canCreatePad: self.canCreatePad,
