@@ -112,6 +112,39 @@ enum FeatureCatalogTests {
         suite.expect(!smearedUnlock && smeared.progress == 1,
                "four Escapes with a modifier in between never unlock; the next Escape starts at 1")
 
+        // User-requested teardown waits only for real releases corresponding
+        // to mouse-down events observed while Cleaning Mode was active.
+        var cleaningMouseGate = CleaningMouseReleaseGate()
+        cleaningMouseGate.buttonDown(0)
+        suite.expect(!cleaningMouseGate.requestDeactivation(),
+               "cleaning teardown waits when the primary button went down while the overlay was active")
+        suite.expect(!cleaningMouseGate.buttonUp(1),
+               "an unrelated release cannot complete a pending cleaning teardown")
+        suite.expect(cleaningMouseGate.buttonUp(0),
+               "the matching physical release completes the pending cleaning teardown")
+        suite.expect(cleaningMouseGate.requestDeactivation(),
+               "cleaning teardown is immediate when no tracked button is held")
+
+        cleaningMouseGate.buttonDown(0)
+        cleaningMouseGate.buttonDown(2)
+        suite.expect(!cleaningMouseGate.requestDeactivation(),
+               "cleaning teardown waits for every tracked mouse button")
+        suite.expect(!cleaningMouseGate.buttonUp(0),
+               "releasing one of several held buttons keeps cleaning teardown pending")
+        suite.expect(cleaningMouseGate.buttonUp(2),
+               "the last matching release completes a multi-button cleaning teardown")
+
+        cleaningMouseGate.buttonDown(0)
+        suite.expect(!cleaningMouseGate.buttonUp(0),
+               "a normal click completed before deactivation never schedules teardown by itself")
+        suite.expect(cleaningMouseGate.requestDeactivation(),
+               "a completed click leaves no stale held-button state")
+        cleaningMouseGate.buttonDown(0)
+        _ = cleaningMouseGate.requestDeactivation()
+        cleaningMouseGate.reset()
+        suite.expect(cleaningMouseGate.pressedButtons.isEmpty && !cleaningMouseGate.deactivationPending,
+               "forced cleaning teardown clears tracked mouse lifecycle state")
+
         // The counters above build their own windows, so nothing else here
         // fails if the shipped constant regresses. Pin it at the source: the
         // 2s window made the gesture impossible for anyone pressing Escape
@@ -125,6 +158,16 @@ enum FeatureCatalogTests {
             .joined(separator: "\n")
         suite.expect(!cleaningCode.isEmpty && cleaningCode.contains("pressWindow: 6.0"),
                "the shipped unlock counter keeps the forgiving 6s press window")
+
+        suite.expect(!cleaningCode.contains("CGEvent(mouseEventSource:"),
+               "Cleaning Mode never synthesizes a global mouse release")
+        suite.expect(!cleaningCode.contains("pressedMouseButtons")
+                && !cleaningCode.contains("CGEventSource.buttonState"),
+               "Cleaning Mode does not infer ownership from a global button-state snapshot")
+        suite.expect(cleaningCode.contains("let shouldFinishUserDeactivation = mouseReleaseGate.deactivationPending")
+                && cleaningCode.contains("mouseReleaseGate.reset()")
+                && cleaningCode.contains("if shouldFinishUserDeactivation {"),
+               "disabled-tap recovery invalidates stale mouse state and preserves a pending user unlock")
 
         // The counter above cannot see how events reach it, and the real HID
         // gesture is not reproducible headlessly. Pin the two properties of the
@@ -140,7 +183,7 @@ enum FeatureCatalogTests {
         } ?? cleaningLines.count
         var modifiersReachCounter = false
         var leakedEvents: [String] = []
-        var failOpenReturns = 0
+        var passThroughReturns = 0
         for (index, line) in cleaningLines[(handlerStart ?? handlerEnd)..<handlerEnd].enumerated()
         where !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") {
             let number = (handlerStart ?? 0) + index + 1
@@ -153,15 +196,18 @@ enum FeatureCatalogTests {
                 }
             }
             if line.contains("return Unmanaged.passUnretained(event)") {
-                failOpenReturns += 1
+                passThroughReturns += 1
             } else if line.contains("return"), !line.contains("return nil") {
                 leakedEvents.append("CleaningModeManager.swift:\(number)")
             }
         }
         suite.expect(modifiersReachCounter,
                "flags-changed events feed the unlock counter, so modifiers reset the Escape count")
-        suite.expect(handlerStart != nil && leakedEvents.isEmpty && failOpenReturns == 1,
-               "the cleaning tap swallows normal input and keeps one disabled-session fail-open path: \(leakedEvents)")
+        suite.expect(handlerStart != nil
+               && leakedEvents.isEmpty
+               && passThroughReturns == 2
+               && cleaningCode.contains("if handleMouseButton(type: type, event: event)"),
+               "the cleaning tap swallows locked input while mouse events and disabled-session recovery pass through: \(leakedEvents)")
         suite.expect(cleaningCode.contains("self.deactivate(restoreSuspendedFeatures: false)")
                 && cleaningCode.contains("shouldRestoreSuspendedFeaturesOnSessionReturn = true")
                 && cleaningCode.contains("self.resumeSuspendedFeatures()")
